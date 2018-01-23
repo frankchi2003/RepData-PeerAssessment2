@@ -1,0 +1,370 @@
+---
+title: "Severe Weather Effects On Population Health and Economic in U.S."
+author: "Frank Chi"
+date: "January 16, 2018"
+output: html_document
+keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Severe Weather Effects On Population Health and Economic in U.S.
+
+## Synopsis
+The frequency and severity of extreme events is expected to increase under climate change today. 
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities.
+Many severe events can result in fatalities, injuries, and property damage.
+There is a need to understand the economic consequences of human exposure to these extreme events, and to prevent such outcomes to the extent possible is a key concern.
+
+This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+## Data Processing
+### Data
+The events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete.
+
+### Data source 
+The data come in the form of comman-separated-value file compressed via the bzip2 algorithm ro reduce its size and it can be downloaded from the following web site:
+
+* [Storm Data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2)
+
+There is also some documentation of the database available. Here you will find how some of the variables are constructed/defined.
+
+* National Weather Service [Storm Data Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)  
+* National Climatic Data Center Storm Events [FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC Storm Events-FAQ Page.pdf)  
+
+### Loading Storm data file
+Before loading the Storm data file the document code need to download the compressed file from web site that described as above. 
+The dataset will be loaded into <font color="red">`stormDS`</font> directly via <font color="red">`read.csv()`</font> function.
+
+```{r}
+    if (!file.exists("StormData.csv.bz2")) {
+        download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2",
+                      "StormData.csv.bz2")
+    }
+    stormDS <- read.csv("StormData.csv.bz2")
+```
+
+### Cleaning data
+
+* Subset dataset.
+We need to know the impact of severe weather events to public health and economic in the US, so we take following subset data of dataset for analysis: <font color="red">`EVTYPE, FATALITIES, INJURIES, PROPDMG, PROPDMGEXP, CROPDMG, and CROPDMGEXP`</font>.  
+* Required <font color="red">`stringr`</font> package.  
+```{r}
+    library(stringr)
+    stormDS_subset <- stormDS[,c("EVTYPE", "FATALITIES", "INJURIES",  "PROPDMG", "PROPDMGEXP", "CROPDMG", "CROPDMGEXP")]
+    stormDS_subset$EVTYPE <-toupper(gsub("\\s+", " ", str_trim(stormDS_subset$EVTYPE)))
+```
+
+### Data transformation
+* Categorized data based on <font color="red">`EVTYPE`</font>. 
+There are `r length(table(stormDS$EVTYPE))` event type in dataset. After analyzed those event type I categorized event type to big group and called it as <font color="red">`EVGROUP`</font>. The default value of `EVGROUP` set to OTHERS.  
+* Required <font color="red">`dplyr`</font> package.  
+```{r}
+    library(dplyr)
+    stormDS2 <- stormDS_subset %>%
+        mutate(EVGROUP = 
+            ifelse(grepl('^(MARINE (HIGH|STRONG|MISHAP))', EVTYPE), 'MARINE STRONG WIND',
+            ifelse(grepl('^(MARINE (THUNDERSTORM|TSTM))', EVTYPE), 'MARINE THUNDERSTORM',
+            ifelse(grepl('^MARINE HAIL', EVTYPE), 'MARINE HAIL',
+            ifelse(grepl('^MARINE ACCIDENT', EVTYPE), 'MARINE ACCIDENT',
+                    'OTHERS') ) ) ) )
+            
+    stormDS2 <- stormDS2 %>%
+        mutate(EVGROUP = 
+            ifelse(grepl('^(ASTRONOMICAL( (HIGH|LOW))? TIDE)', EVTYPE), 'ASTRONOMICAL TIDE',
+            ifelse(grepl('^(AVALANC(H)?)E$', EVTYPE), 'AVALANCHE',
+            ifelse(grepl('BLIZZARD', EVTYPE), 'BLIZZARD',
+            ifelse(grepl('^((COASTAL|CSTL)\\s?((FL(OO)?)D(IN[G]?|G)?))$', EVTYPE), 'COASTAL FLOOD',
+            ifelse(grepl('^(COLD(/| (AND )?)WIND CHILL)', EVTYPE), 'COLD/WIND CHILL',
+            ifelse(grepl('^(DEBRIS FLOW)', EVTYPE), 'DEBRIS FLOW',
+            ifelse(grepl('^(DENSE\\s?SMOKE)', EVTYPE), 'DENSE SMOKE',
+            ifelse(grepl('(DROUGHT|DRY SPELL)', EVTYPE), 'DROUGHT',
+            ifelse(grepl('^(DUST (DEVIL|DEVEL))$', EVTYPE), 'DUST DEVIL',
+            ifelse(grepl('^(DUST STORM)', EVTYPE), 'DUST STORM',
+            ifelse(grepl('^(((EXTREME|BITTER|LOW)? )?WIND)\\s?CHILL', EVTYPE), 'EXTREME COLD/WIND CHILL',
+                  'OTHERS') ) ) ) ) ) ) ) ) ) ) )
+
+        stormDS2 <- stormDS2 %>%
+        mutate(EVGROUP = ifelse(!grepl('^(OTHERS)$', EVGROUP), EVGROUP,
+            ifelse(grepl('(TROPICAL|TYPHOON)', EVTYPE), 'TROPICAL STORM',
+            ifelse(grepl('HURRICANE', EVTYPE), 'HURRICANE',
+            ifelse(grepl('(TORNADO|TORNDAO|LANDSPOUT)', EVTYPE), 'TORNADO',
+            ifelse( grepl('^T[H]?U[N]?[D]?E[E]?[R]?[E]?[S]?T(ORM|ROM|SORM)', EVTYPE) |
+                    grepl('^(TSTM|GUSTNADO|DOWNBURST|HEATBURST)', EVTYPE) |
+                    grepl('((SEVERE|GUSTY) (THUNDERSTORM|TURBULENCE))', EVTYPE), 'THUNDERSTORM',
+            ifelse(grepl('(MICROBURST|MIRCOBURST|MICOBURST)', EVTYPE), 'MICROBURST',
+            ifelse(grepl('WA[Y]?TER\\s?SPOUT[S]?', EVTYPE), 'WATERSPOUT',
+            ifelse(grepl('((FUNNEL|WALL)( CLOUD)?)', EVTYPE), 'FUNNEL CLOUD',
+            ifelse(grepl('^(LIGHTNING|LIGHTING|LIGNTNING)', EVTYPE), 'LIGHTNING',
+                    EVGROUP) ) ) ) ) ) ) ) ) )
+                   
+    stormDS2 <- stormDS2 %>%
+        mutate(EVGROUP = ifelse(!grepl('^(OTHERS)$', EVGROUP), EVGROUP,
+            ifelse(grepl('RIP CURRENT', EVTYPE), 'RIP CURRENT',
+            ifelse(grepl('TSUNAMI', EVTYPE), 'TSUNAMI',
+            ifelse(grepl('((COASTAL|STORM|BLOW[ -]?OUT)\\s?(SURGE|TIDE))', EVTYPE) |
+                   grepl('((COASTAL\\s?)STORM)', EVTYPE), 'STORM SURGE',
+            ifelse(grepl('(((HIGH|HEAVY|ROUGH|ROGUE|HAZARDOUS)\\s?)(TIDE|SEAS|SURF|WAVE))', EVTYPE), 'HIGH TIDE',
+            ifelse(grepl('SEICHE', EVTYPE), 'SEICHE',
+            ifelse(grepl('^((COASTAL|BEACH) EROSION)', EVTYPE), 'COASTAL EROSION',
+                   EVGROUP) ) ) ) ) ) ) )
+
+    stormDS2 <- stormDS2 %>%
+        mutate(EVGROUP = ifelse(!grepl('^(OTHERS)$', EVGROUP), EVGROUP,
+            ifelse(grepl('((UNUSUAL(LY)?|UNSEASONA(L|BL[EY])|ABNORMAL(LY)?|VERY|EXTREME(LY)?|EXCESSIVE(LY)?|EXTENDED|RECORD|PROLONG|SEVERE) (HEAT|HOT))', EVTYPE), 'EXCESSIVE HEAT',
+            ifelse(grepl('((UNUSUAL(LY)?|UNSEASONA(L|BL[EY])|ABNORMAL(LY)?|VERY|EXTREME(LY)?|EXCESSIVE(LY)?|EXTENDED|RECORD|PROLONG|SEVERE) (WARM(TH)?))', EVTYPE), 'UNSEASONABLY WARM',
+            ifelse(grepl('((UNUSUAL(LY)?|UNSEASONA(L|BL[EY])|ABNORMAL(LY)?|VERY|EXTREME(LY)?|EXCESSIVE(LY)?|EXTENDED|RECORD|PROLONG|SEVERE) (WARM AND )?)DRY', EVTYPE), 'UNSEASONABLY DRY',
+            ifelse(grepl('((UNUSUAL(LY)?|UNSEASONA(L|BL[EY])|ABNORMAL(LY)?|VERY|EXTREME(LY)?|EXCESSIVE(LY)?|EXTENDED|RECORD|PROLONG|SEVERE) WET)', EVTYPE), 'UNSEASONABLY WET',
+            ifelse(grepl('((UNUSUAL(LY)?|UNSEASONA(L|BL[EY])|ABNORMAL(LY)?|VERY|EXTREME(LY)?|EXCESSIVE(LY)?|EXTENDED|RECORD|PROLONG|SEVERE) (COLD|LOW))', EVTYPE), 'EXTREME COLD',
+            ifelse(grepl('((UNUSUAL(LY)?|UNSEASONA(L|BL[EY])|ABNORMAL(LY)?) COOL)', EVTYPE), 'UNSEASONABLY COOL',
+                   EVGROUP) ) ) ) ) ) ) )
+
+    
+    # SNOW
+     stormDS2 <- stormDS2 %>%
+        mutate(EVGROUP = ifelse(!grepl('^(OTHERS)$', EVGROUP), EVGROUP,
+            ifelse(grepl('(WINTER|SNOW|ICE)\\s?STORM', EVTYPE) | 
+                   grepl('THUNDER\\s?SNOW', EVTYPE), 'WINTER STORM',
+            ifelse(grepl('(BLOWING SNOW|SNOW SQUALL)', EVTYPE) | 
+                   grepl('(((SNOW|ICE)(/| | AND |- )?)(STRONG|HIGH)) WIND', EVTYPE), 'WINTER STORM',
+            ifelse(grepl('((HEAVY|RECORD|EXCESSIVE)( WET)?) SNOW', EVTYPE), 'HEAVY SNOW',
+            ifelse(grepl('(SLEET|FREEZING RAIN|ICE PELLET(S)?|FREEZING PRECIP)', EVTYPE), 'FREEZING RAIN',
+            ifelse(grepl('(FREEZING (DRIZZLE|FOG))', EVTYPE), 'FREEZING FOG',
+            ifelse(grepl('(LAKE(( |-)EFFECT)?( OF)? SNOW)', EVTYPE), 'LAKE EFFECT SNOW',
+            ifelse(grepl('^((HEAVY )?RAIN)(/| )SNOW', EVTYPE) |
+                   grepl('^((WINT(ER[Y]?|RY)) MIX)', EVTYPE) |
+                   grepl('^(MIXED PRECIP(ITATION)?)', EVTYPE), 'WINTRY MIX',
+            ifelse(grepl('^(((LIGHT|FIRST|EARLY|LATE|LATE( |-)SEASON|UNUSUALLY LATE|MODERATE|ACCUMULATED) )?SNOW)', EVTYPE) |
+                   grepl('^(((SEASONAL|MONTHLY|MOUNTAIN|LACK OF|RECORD(\\s\\w+)?) )?SNOW)', EVTYPE) |
+                   grepl('^(((WET|ICE|DRIFTING|COLD)( |/| AND ))?SNOW)', EVTYPE), 'SNOW',
+            ifelse(grepl('FALLING (SNOW|ICE)', EVTYPE), 'FALLING SNOW',
+                    EVGROUP) ) ) ) ) ) ) ) ) ) )
+   
+    # RAIN
+     stormDS2 <- stormDS2 %>%
+        mutate(EVGROUP = ifelse(!grepl('^(OTHERS)$', EVGROUP), EVGROUP,
+            ifelse(grepl('^(((HEAVY|HVY|RECORD|EXCESSIVE|TORRENTIAL)[ /]?)(PRECIP[IA]TATION|RAIN|SHOWER))', EVTYPE), 'HEAVY RAIN',
+            ifelse(grepl('^(((MONTHLY|PROLONGED|EARLY) )?RAIN)$', EVTYPE), 'RAIN',
+            ifelse(grepl('UNSEASONAL RAIN', EVTYPE), 'RAIN',
+            ifelse(grepl('RECORD LOW RAINFALL', EVTYPE), 'LOW RAINFALL',
+            ifelse(grepl('(FLASH ((FL(OO|OOO)?)D(IN[G]?|G)?))', EVTYPE) |
+                   grepl('^((FLOOD(/| ))FLASH)$', EVTYPE), 'FLASH FLOOD',
+            ifelse(grepl('^(URBAN(((/| AND )SMALL)( STREAM)?)?( ((FL(OO)?)D(IN[G]?|G)?))?)', EVTYPE) |
+                   grepl('^(SMALL\\s?STREAM(/| AND | )URBAN ((FL(OO)?)D(IN[G]?|G)?))', EVTYPE) |
+                   grepl('^((SMALL\\s?STREAM( AND)?)( ((FL(OO)?)D(IN[G]?|G)?))?)', EVTYPE), 'FLOOD',
+            ifelse(grepl('^((RIVER|STREAM) ((FL(OO)?)D(IN[G]?|G)?))$', EVTYPE), 'FLOOD',
+            ifelse(grepl('^((LAKE(SHORE)?) ((FL(OO)?)D(IN[G]?|G)?))$', EVTYPE), 'LAKESHORE FLOOD',
+            ifelse(grepl('^(TIDAL ((FL(OO)?)D(IN[G]?|G)?))$', EVTYPE), 'FLOOD',
+            ifelse(grepl('^(BEACH ((FL(OO)?)D(IN[G]?|G)?))$', EVTYPE), 'LAKESHORE FLOOD',
+            ifelse(grepl('^((STREET|LOCAL|HIGHWAY) ((FL(OO)?)D(IN[G]?|G)?))$', EVTYPE), 'FLOOD',
+            ifelse(grepl('^(MAJOR ((FL(OO)?)D(IN[G]?|G)?))$', EVTYPE), 'FLOOD',
+            ifelse(grepl('^(MINOR ((FL(OO)?)D(IN[G]?|G)?))$', EVTYPE), 'FLOOD',
+            ifelse(grepl('^((ICE JAM|BREAKUP) ((FL(OO)?)D(IN[G]?|G)?))$', EVTYPE), 'FLOOD',
+            ifelse(grepl('^((FLOOD(/RAIN/|/STRONG ))WIND)$', EVTYPE), 'FLOOD',
+            ifelse(grepl('^((RURAL )?((FL(OO)?)D(IN[G]?|G|S)?))$', EVTYPE), 'FLOOD',
+            ifelse(grepl('^((MUD|ROCK|LAND)\\s?(SLIDE|SLUMP))$', EVTYPE), 'LAND SLIDE',
+            ifelse(grepl('^((RAIN(/| | AND ))WIND)$', EVTYPE), 'RAIN',
+                   EVGROUP) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) ) )
+    
+    #WIND
+     stormDS2 <- stormDS2 %>%
+        mutate(EVGROUP = ifelse(!grepl('^(OTHERS)$', EVGROUP), EVGROUP,
+            ifelse(grepl('^((HIGH|STRONG|GRADIENT|NON[ -]TSTM|WHIRL)\\s?WIND)', EVTYPE) |
+                   grepl('^(STORM( FORCE)?) WIND', EVTYPE) |
+                   grepl('^(GUSTY( LAKE)?) WIND', EVTYPE) |
+                   grepl('^(WIND (STORM|ADVISORY|GUSTS))', EVTYPE), 'HIGH WIND',
+            ifelse(grepl('^(((WAKE )?LOW )?WIND[S]?)$', EVTYPE) |
+                   grepl('^WND$', EVTYPE), 'WIND',
+            ifelse(grepl('WIND DAMAGE', EVTYPE), 'WIND DAMAGE',
+            ifelse(grepl('^(WIND AND WAVE|HEAVY SURF AND WIND)', EVTYPE), 'WIND WAVE',
+                   EVGROUP) ) ) ) ) )
+     
+   
+    # COLD
+     stormDS2 <- stormDS2 %>%
+        mutate(EVGROUP = ifelse(!grepl('^(OTHERS)$', EVGROUP), EVGROUP,
+            ifelse(grepl('^(((COOL|COLD)(/| AND | )?)WET)', EVTYPE), 'COLD WET',
+            ifelse(grepl('COLD\\s?WAVE', EVTYPE), 'COLD WAVE',
+            ifelse(grepl('^((COLD|LOW)( (WEATHER|TEMPERATURE[S]?))?)$', EVTYPE) |
+                   grepl('^(COLD/WINDS)$', EVTYPE), 'COLD WEATHER',
+            ifelse(grepl('WINTER WEATHER', EVTYPE), 'WINTER WEATHER',
+            ifelse(grepl('^((FREEZE|GLAZE|ICE)( ICE)?)$', EVTYPE), 'FROST/FREEZE',
+            ifelse(grepl('^((DAMAGING|HARD|AGRICULTURAL) FREEZE)$', EVTYPE), 'FROST/FREEZE',
+            ifelse(grepl('^((BLACK ICE)|(PATCHY ICE)|(((IC(E|Y))( ON)?) ROAD(S)?))$', EVTYPE), 'BLACK ICE',
+            ifelse(grepl('^(ICE (FLOE(S)?|JAM))$', EVTYPE), 'ICE FLOES',
+            ifelse(grepl('^(ICE\\s?FOG)$', EVTYPE), 'FREEZING FOG',
+            ifelse(grepl('^(((EARLY|LATE)\\s?)FREEZE)$', EVTYPE), 'FROST/FREEZE',
+                   EVGROUP) ) ) ) ) ) ) ) ) ) ) )
+ 
+    # HOT DRY WARM
+     stormDS2 <- stormDS2 %>%
+        mutate(EVGROUP = ifelse(!grepl('^(OTHERS)$', EVGROUP), EVGROUP,
+            ifelse(grepl('HEAT WAVE', EVTYPE), 'HEAT',
+            ifelse(grepl('^HEAT$', EVTYPE), 'HEAT',
+            ifelse(grepl('(DRY( HOT)?) (WEATHER|CONDITION|PATTERN)', EVTYPE) |
+                   grepl('^(DRY(NESS)?)$', EVTYPE), 'DRY WEATHER',
+            ifelse(grepl('((HOT\\s?)(WEATHER|CONDITION|PATTERN|SPELL|AND DRY))', EVTYPE), 'HEAT',
+            ifelse(grepl('WARM WEATHER', EVTYPE), 'WARM WEATHER',
+            ifelse(grepl('(((WILD|FOREST)\\s?)FIRE)', EVTYPE), 'WILD FIRE',
+            ifelse(grepl('(((BRUSH|GRASS)\\s?)FIRE)', EVTYPE), 'BRUSH FIRE',
+                   EVGROUP) ) ) ) ) ) ) ) )
+     
+     # FROST HAIL FOG SMOKE DUST
+     stormDS2 <- stormDS2 %>% 
+        mutate(EVGROUP = ifelse(!grepl('^(OTHERS)$', EVGROUP), EVGROUP,
+            ifelse(grepl('^(((COLD( AND)?|EARLY|FIRST) )?FROST)', EVTYPE), 'FROST/FREEZE',
+            ifelse(grepl('^(((SMALL|NON SEVERE|LATE SEASON|DEEP|WIND)[/ ])?HAIL)', EVTYPE), 'HAIL',
+            ifelse(grepl('^(DENSE )?FOG', EVTYPE), 'FOG',
+            ifelse(grepl('^VOLCANIC ASH', EVTYPE), 'VOLCANIC ASH',
+            ifelse(grepl('^(((SAHARAN|BLOWING) )?DUST(STORM)?)$', EVTYPE), 'DUST STORM',
+            ifelse(grepl('^SMOKE$', EVTYPE), 'SMOKE',
+            ifelse(grepl('^(DAM\\s?(BREAK|FAILURE))', EVTYPE), 'DAM BREAK',
+                   EVGROUP) ) ) ) ) ) ) ) )
+ 
+    #stormDS_subset$EVGROUP[grepl('DUST DEVIL', stormDS_subset$EVGROUP)]<-'OTHERS'
+     str(stormDS2)
+
+```
+
+* The `PROPDMGEXP` and `CROPDMGEXP` are currently an alpha-numeric character that use to signify magnitude of value of damage. They need to be converted to a numeric value in power of tens.  
+* Required <font color="red">`plyr`</font> package.  
+```{r}
+    library(plyr)
+
+    stormDS2$PROPDMGEXP <-toupper(str_trim(stormDS2$PROPDMGEXP))
+    stormDS2$CROPDMGEXP <-toupper(str_trim(stormDS2$CROPDMGEXP))
+
+    dimnames(table(stormDS2$PROPDMGEXP))
+    dimnames(table(stormDS2$CROPDMGEXP))
+    
+    stormDS2$PROPDMGEXP <- mapvalues(stormDS2$PROPDMGEXP, 
+                                     from=c("", "-", "?", "+", "0", "1", "2", "3", "4", "5", "6", "7", "8", "B", "H", "K", "M"), 
+                                     to=c(1,1,0,1,1,10,100,1000,10^4,10^5,10^6,10^7,10^8,10^9,100,1000, 10^6),
+                                     warn_missing = FALSE)
+    stormDS2$PROPDMGEXP <- as.numeric(as.character(stormDS2$PROPDMGEXP))
+    
+    stormDS2$CROPDMGEXP <- mapvalues(stormDS2$CROPDMGEXP, 
+                                     from=c("", "-", "?", "+", "0", "1", "2", "3", "4", "5", "6", "7", "8", "B", "H", "K", "M"), 
+                                     to=c(1,1,0,1,1,10,100,1000,10^4,10^5,10^6,10^7,10^8,10^9,100,1000, 10^6),
+                                     warn_missing = FALSE)
+    stormDS2$CROPDMGEXP <- as.numeric(as.character(stormDS2$CROPDMGEXP))
+```
+
+## Results
+* Summarize the estimated property and crop damage and fatalities and injuries for each event type (`EVGROUP`)  
+* Required <font color="red">`dplyr`</font> package.  
+```{r}
+    library(dplyr)
+    stormDS2$PROPDMGVALUE <- stormDS2$PROPDMGEXP * stormDS2$PROPDMG
+    stormDS2$CROPDMGVALUE <- stormDS2$CROPDMGEXP * stormDS2$CROPDMG
+    stormDS2$DMGTOTAL <- stormDS2$PROPDMGVALUE + stormDS2$CROPDMGVALUE
+    
+    damageSUM <- ddply(stormDS2, .(EVGROUP), summarize, 
+                        dmgTotal=sum(DMGTOTAL),
+                        dmgProperty=sum(PROPDMGVALUE),
+                        dmgCrop=sum(CROPDMGVALUE),
+                        fatalities=sum(FATALITIES),
+                        injuries=sum(INJURIES)
+                        )
+```
+
+### Questions 1. Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+* The fatalities as well as injuries are key information related to population health. Let's look the total count of fatalities and injuries for each event type (I used `EVGROUP` in my analysis). 
+    + Created a `fatality` summary table that contains top 20 total `fatalities` of each event type.  
+    + And then created a `injury` summary table that contains top 20 total `injuries` of each event type.  
+    + then created a `results` table that combines `fatality` and `injury` 
+    + Plot bar chart of `results`  
+
+* Rrequired <font color="red">`dplyr`</font> and <font color="red">`ggplot2`</font> packages.   
+```{r}
+    library(dplyr)
+    library(ggplot2)
+```
+
+* The top 10 of top 20 events that cause `Fatality` are
+```{r}
+    fatality <- head(damageSUM[order(damageSUM$fatalities, decreasing = TRUE),], 20) %>%
+        mutate(damageType="Fatalities", damageTotal=fatalities)
+    fatality <- fatality[c("EVGROUP", "damageType", "damageTotal")]
+    head(fatality, 10)
+```
+
+* The top 10 of top 20 events that cause `Injury` are
+```{r}
+    injury <- head(damageSUM[order(damageSUM$injuries, decreasing = TRUE),], 20) %>%
+        mutate(damageType="Injuries", damageTotal=injuries)
+    injury <- injury[c("EVGROUP", "damageType", "damageTotal")]
+    head(injury, 10)
+```
+
+* Bar Chart of Fatalities and Injuries by Event Type
+```{r}
+    results <- rbind(fatality, injury)
+    results$EVGROUP <- as.factor(results$EVGROUP)
+    results$damageType <- as.factor(results$damageType)
+    ggplot(results, aes(EVGROUP, damageTotal, fill=damageType)) + 
+        geom_bar(stat="identity") +
+        labs(x="Event Type", y="Number of Injuries/Fatalities", title="Fatalities and Injuries by Event Type") +
+        facet_grid(damageType~., scales = "free_y") + 
+        guides(fill=FALSE) +
+        theme(axis.text.x = element_text(angle=30, hjust=1, vjust=1))
+
+```
+
+#### Data Analysis Result
+**The Bar Chart shows that <font color="red">Tornado</font> has the most harmful with respect to population health on both <font color="red">`Fatalities`</font> and <font color="red">`Injuries`</font>.**
+
+
+
+### Questions 2. Across the United States, which types of events have the greatest economic consequences?  
+* The property damages as well as crops damages are key information related to economic consequences. Let's look the total damage in properties and crops for each event type (I used `EVGROUP` in my analysis). 
+    + Created a `property` summary table that contains top 20 total `dmgProperty` of each event type.  
+    + And then created a `crops` summary table that contains top 20 total `dmgCrop` of each event type.  
+    + then created a `results` table that combines `property` and `crops` 
+    + Plot bar chart of `results`  
+
+* Rrequired <font color="red">`dplyr`</font> and <font color="red">`ggplot2`</font> packages.   
+
+```{r}
+    library(dplyr)
+    library(ggplot2)
+```
+
+* The top 10 of top 20 events that cause `Property` damages are
+```{r}
+    
+    property <- head(damageSUM[order(damageSUM$dmgProperty, decreasing = TRUE),], 20) %>%
+        mutate(damageType="Property", damageTotal=dmgProperty/1000000)
+    property <- property[c("EVGROUP", "damageType", "damageTotal")]
+    head(property)
+
+```
+
+* The top 10 of top 20 events that cause `Crops` damages are
+```{r}
+    crops <- head(damageSUM[order(damageSUM$dmgCrop, decreasing = TRUE),], 20) %>%
+        mutate(damageType="Crops", damageTotal=dmgCrop/1000000)
+    crops <- crops[c("EVGROUP", "damageType", "damageTotal")]
+    head(crops)
+    
+```
+
+* Bar Chart of Properties and Crops Damages by Event Type
+```{r}
+    results <- rbind(property, crops)
+    results$EVGROUP <- as.factor(results$EVGROUP)
+    results$damageType <- as.factor(results$damageType)
+    ggplot(results, aes(EVGROUP, damageTotal, fill=damageType)) + 
+        geom_bar(stat="identity") +
+        labs(x="Event Type", y="Properties/Crops Damages (million $)", 
+             title="Properties and Crops Damages by Event Type") +
+        facet_grid(damageType~., scales = "free_y") + 
+        guides(fill=FALSE) +
+        theme(axis.text.x = element_text(angle=30, hjust=1, vjust=1))
+
+```
+
+#### Data Analysis Result
+**The Bar Chart we can see that <font color="red">`Drought`</font> and <font color="red">`Flood`</font> are obviously the first and secondary major impatct to `Crops` damages. The <font color="red">`Flood`</font> and <font color="red">`Tropical Storm`</font>  are the first and secondary important for `Property` damages.**
+
